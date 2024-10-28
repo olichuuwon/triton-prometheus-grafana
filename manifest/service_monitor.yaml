@@ -1,0 +1,15 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: triton-servicemonitor
+  namespace: starchat
+  labels:
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: triton-is-predictor
+  endpoints:
+    - port: metrics
+      interval: 5s
+      path: /metrics
