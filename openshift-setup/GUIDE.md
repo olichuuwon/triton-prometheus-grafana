@@ -1,9 +1,14 @@
-### **Step 1: Verify the ServiceMonitor Setup**
+# Guide to Openshift Set Up
+
+## **Step 1: Verify the ServiceMonitor Setup**
+
 Your `ServiceMonitor` setup ensures Prometheus in OpenShift can scrape metrics from your application. Ensure the following:
+
 1. The `selector.matchLabels` matches the labels on the service exposing `/metrics`.
 2. The `endpoints` correctly define the `port` and `path`.
 
-#### **Your `ServiceMonitor` YAML (adjust if needed):**
+### **Your `ServiceMonitor` YAML (adjust if needed):**
+
 ```yaml
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
@@ -22,7 +27,8 @@ spec:
       path: /metrics
 ```
 
-#### **Ensure the Service Exists:**
+### **Ensure the Service Exists:**
+
 Your service should have the `app: triton-is-predictor` label and expose the `metrics` port.
 
 ```yaml
@@ -44,10 +50,12 @@ spec:
 
 ---
 
-### **Step 2: Configure Prometheus to Scrape Metrics**
+## **Step 2: Configure Prometheus to Scrape Metrics**
+
 Prometheus in OpenShift uses the `ServiceMonitor` resource to discover scrape targets. Verify that Prometheus is configured with a `serviceMonitorSelector` to include your `ServiceMonitor`:
 
-#### **Example Prometheus Configuration:**
+### **Example Prometheus Configuration:**
+
 ```yaml
 apiVersion: monitoring.coreos.com/v1
 kind: Prometheus
@@ -62,10 +70,12 @@ spec:
 
 ---
 
-### **Step 3: Deploy Grafana**
+## **Step 3: Deploy Grafana**
+
 In an OpenShift environment, you’ll typically deploy Grafana as a pod using a Deployment or StatefulSet.
 
-#### **Example Grafana Deployment for OpenShift:**
+### **Example Grafana Deployment for OpenShift:**
+
 ```yaml
 apiVersion: apps/v1
 kind: Deployment
@@ -100,8 +110,10 @@ spec:
           emptyDir: {}
 ```
 
-#### **Expose Grafana as a Route:**
+### **Expose Grafana as a Route:**
+
 Create an OpenShift route to expose Grafana:
+
 ```yaml
 apiVersion: route.openshift.io/v1
 kind: Route
@@ -118,40 +130,51 @@ spec:
 
 ---
 
-### **Step 4: Add Prometheus as a Data Source**
+## **Step 4: Add Prometheus as a Data Source**
+
 Once Grafana is running:
+
 1. Access Grafana using the OpenShift route you created.
 2. Log in with the credentials (`admin/admin` in this example).
 3. Add Prometheus as a data source:
    - Navigate to **Configuration > Data Sources > Add data source**.
    - Select **Prometheus**.
    - Enter the Prometheus service URL. For example:
-     ```
+
+     ```text
      http://prometheus-operated.monitoring.svc:9090
      ```
 
 ---
 
-### **Step 5: Create Dashboards**
+## **Step 5: Create Dashboards**
+
 Create a Grafana dashboard to visualize the metrics scraped by your `ServiceMonitor`.
 
-#### **Example PromQL Queries:**
+### **Example PromQL Queries:**
+
 - **Total HTTP Requests**:
+
   ```promql
   http_requests_total{namespace="starchat", pod=~"triton.*"}
   ```
+
 - **CPU Usage**:
+
   ```promql
   rate(container_cpu_usage_seconds_total{namespace="starchat", pod=~"triton.*"}[1m])
   ```
+
 - **Memory Usage**:
+
   ```promql
   container_memory_usage_bytes{namespace="starchat", pod=~"triton.*"}
   ```
 
 ---
 
-### **Step 6: Verify the Setup**
+## **Step 6: Verify the Setup**
+
 - **Check Prometheus Targets**:
   Open Prometheus at `http://prometheus-operated.monitoring.svc:9090/targets` to verify the `ServiceMonitor` is active and targets are "UP."
 - **Test Grafana Panels**:
