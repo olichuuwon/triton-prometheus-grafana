@@ -1,8 +1,8 @@
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
-  name: triton-servicemonitor
-  namespace: starchat
+  name: servicemonitor
+  namespace: triton-monitoring
   labels:
     release: prometheus
 spec:
