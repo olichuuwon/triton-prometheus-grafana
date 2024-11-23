@@ -1,18 +1,25 @@
-global:
-  scrape_interval: 10s # By default, scrape targets every 10 seconds.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: triton-monitoring
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 10s # By default, scrape targets every 10 seconds.
 
-scrape_configs:
-  # Scraping configuration for Triton inference service
-  - job_name: 'triton'
-    scrape_interval: 5s
-    static_configs:
-      - targets: ['monitoring-triton-inference-services.apps.nebula.sl']
+    scrape_configs:
+      # Scraping configuration for Triton inference service
+      - job_name: 'triton'
+        scrape_interval: 5s
+        static_configs:
+          - targets: ['monitoring-triton-inference-services.apps.nebula.sl']
 
-  # Additional example scrape jobs (commented out)
-  # - job_name: 'node_exporter'
-  #   static_configs:
-  #     - targets: ['node_exporter:9100']
+      # Additional example scrape jobs (commented out)
+      # - job_name: 'node_exporter'
+      #   static_configs:
+      #     - targets: ['node_exporter:9100']
 
-  # - job_name: 'cadvisor'
-  #   static_configs:
-  #     - targets: ['cadvisor:8080']
+      # - job_name: 'cadvisor'
+      #   static_configs:
+      #     - targets: ['cadvisor:8080']
