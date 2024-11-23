@@ -110,7 +110,25 @@ spec:
           emptyDir: {}
 ```
 
-### **Expose Grafana as a Route:**
+### **Expose Grafana as a Service & Route:**
+
+Create an OpenShift service to expose Grafana:
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+  namespace: triton-monitoring
+spec:
+  selector:
+    app: grafana
+  ports:
+    - protocol: TCP
+      port: 3000
+      targetPort: 3000
+  type: ClusterIP
+```
 
 Create an OpenShift route to expose Grafana:
 
