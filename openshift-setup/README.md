@@ -1,87 +1,137 @@
-# Guide to Openshift Set Up
 
-## **Step 1: Verify the ServiceMonitor Setup**
+# Guide to OpenShift Setup
 
-Your `ServiceMonitor` setup ensures Prometheus in OpenShift can scrape metrics from your application. Ensure the following:
+## Updated Setup Instructions for Prometheus and Grafana
 
-1. The `selector.matchLabels` matches the labels on the service exposing `/metrics`.
-2. The `endpoints` correctly define the `port` and `path`.
+### **Step 1: Deploy Prometheus**
 
-### **Your `ServiceMonitor` YAML (adjust if needed):**
+To deploy Prometheus manually instead of using OpenShift's built-in operator:
+
+1. Apply the Prometheus Deployment:
 
 ```yaml
-apiVersion: monitoring.coreos.com/v1
-kind: ServiceMonitor
+apiVersion: apps/v1
+kind: Deployment
 metadata:
-  name: triton-servicemonitor
-  namespace: starchat
-  labels:
-    release: prometheus  # This should match the Prometheus operator's selector
+  name: prometheus
+  namespace: triton-monitoring
 spec:
+  replicas: 1
   selector:
     matchLabels:
-      app: triton-is-predictor
-  endpoints:
-    - port: metrics
-      interval: 5s
-      path: /metrics
+      app: prometheus
+  template:
+    metadata:
+      labels:
+        app: prometheus
+    spec:
+      containers:
+      - name: prometheus
+        image: prom/prometheus:v2.45.0
+        args:
+          - "--config.file=/etc/prometheus/prometheus.yml"
+          - "--storage.tsdb.path=/prometheus"
+        ports:
+          - containerPort: 9090
+        volumeMounts:
+          - name: prometheus-config
+            mountPath: /etc/prometheus
+          - name: prometheus-data
+            mountPath: /prometheus
+      volumes:
+        - name: prometheus-config
+          configMap:
+            name: prometheus-config
+        - name: prometheus-data
+          emptyDir: {}
+
 ```
 
-### **Ensure the Service Exists:**
-
-Your service should have the `app: triton-is-predictor` label and expose the `metrics` port.
+2. Create a Prometheus Service to expose it within the cluster:
 
 ```yaml
 apiVersion: v1
 kind: Service
 metadata:
-  name: triton-service
-  namespace: starchat
-  labels:
-    app: triton-is-predictor
+  name: prometheus
+  namespace: triton-monitoring
 spec:
-  ports:
-    - name: metrics
-      port: 8080
-      targetPort: 8080
   selector:
-    app: triton-is-predictor
+    app: prometheus
+  ports:
+    - protocol: TCP
+      port: 9090
+      targetPort: 9090
+  type: ClusterIP
+
 ```
 
----
-
-## **Step 2: Configure Prometheus to Scrape Metrics**
-
-Prometheus in OpenShift uses the `ServiceMonitor` resource to discover scrape targets. Verify that Prometheus is configured with a `serviceMonitorSelector` to include your `ServiceMonitor`:
-
-### **Example Prometheus Configuration:**
+3. Expose Prometheus externally using a Route:
 
 ```yaml
-apiVersion: monitoring.coreos.com/v1
-kind: Prometheus
+apiVersion: route.openshift.io/v1
+kind: Route
 metadata:
   name: prometheus
-  namespace: monitoring
+  namespace: triton-monitoring
 spec:
-  serviceMonitorSelector:
-    matchLabels:
-      release: prometheus
+  to:
+    kind: Service
+    name: prometheus
+    weight: 100
+  port:
+    targetPort: 9090
+  tls:
+    termination: edge
+  wildcardPolicy: None
+
+```
+
+4. Configure Prometheus with a ConfigMap:
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: triton-monitoring
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 10s # By default, scrape targets every 10 seconds.
+
+    scrape_configs:
+      # Scraping configuration for Triton inference service
+      - job_name: 'triton'
+        scrape_interval: 5s
+        static_configs:
+          - targets: ['monitoring-triton-inference-services.apps.nebula.sl']
+
+      # Additional example scrape jobs (commented out)
+      # - job_name: 'node_exporter'
+      #   static_configs:
+      #     - targets: ['node_exporter:9100']
+
+      # - job_name: 'cadvisor'
+      #   static_configs:
+      #     - targets: ['cadvisor:8080']
+
 ```
 
 ---
 
-## **Step 3: Deploy Grafana**
+### **Step 2: Deploy Grafana**
 
-In an OpenShift environment, you’ll typically deploy Grafana as a pod using a Deployment or StatefulSet.
+To visualize the metrics collected by Prometheus:
 
-### **Example Grafana Deployment for OpenShift:**
+1. Apply the Grafana Deployment:
 
 ```yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: grafana
-  namespace: monitoring
+  namespace: triton-monitoring
 spec:
   replicas: 1
   selector:
@@ -110,9 +160,7 @@ spec:
           emptyDir: {}
 ```
 
-### **Expose Grafana as a Service & Route:**
-
-Create an OpenShift service to expose Grafana:
+2. Create a Grafana Service:
 
 ```yaml
 apiVersion: v1
@@ -130,14 +178,14 @@ spec:
   type: ClusterIP
 ```
 
-Create an OpenShift route to expose Grafana:
+3. Expose Grafana externally using a Route:
 
 ```yaml
 apiVersion: route.openshift.io/v1
 kind: Route
 metadata:
   name: grafana
-  namespace: monitoring
+  namespace: triton-monitoring
 spec:
   to:
     kind: Service
@@ -148,54 +196,97 @@ spec:
 
 ---
 
-## **Step 4: Add Prometheus as a Data Source**
+### **Step 3: Configure Prometheus as a Data Source in Grafana**
 
-Once Grafana is running:
+Once Grafana is deployed and accessible:
 
-1. Access Grafana using the OpenShift route you created.
-2. Log in with the credentials (`admin/admin` in this example).
-3. Add Prometheus as a data source:
-   - Navigate to **Configuration > Data Sources > Add data source**.
-   - Select **Prometheus**.
-   - Enter the Prometheus service URL. For example:
-
-     ```text
-     http://prometheus-operated.monitoring.svc:9090
-     ```
+1. Access Grafana using the route URL from your cluster.
+2. Log in using the credentials defined in the deployment (`admin/admin` by default).
+3. Navigate to **Configuration > Data Sources > Add Data Source**.
+4. Select **Prometheus** and provide the Prometheus service URL, e.g.:
+   ```
+   http://prometheus.triton-monitoring.svc:9090
+   ```
 
 ---
 
-## **Step 5: Create Dashboards**
+### **Step 4: Verify and Create Dashboards**
 
-Create a Grafana dashboard to visualize the metrics scraped by your `ServiceMonitor`.
-
-### **Example PromQL Queries:**
-
-- **Total HTTP Requests**:
-
-  ```promql
-  http_requests_total{namespace="starchat", pod=~"triton.*"}
-  ```
-
-- **CPU Usage**:
-
-  ```promql
-  rate(container_cpu_usage_seconds_total{namespace="starchat", pod=~"triton.*"}[1m])
-  ```
-
-- **Memory Usage**:
-
-  ```promql
-  container_memory_usage_bytes{namespace="starchat", pod=~"triton.*"}
-  ```
+- Verify Prometheus is collecting metrics by checking its targets:
+  Visit the Prometheus UI (via route) and ensure all targets are listed as "UP."
+- Create Grafana dashboards using queries such as:
+  - **Total HTTP Requests**:
+    ```promql
+    http_requests_total
+    ```
+  - **CPU Usage**:
+    ```promql
+    rate(container_cpu_usage_seconds_total[1m])
+    ```
 
 ---
 
-## **Step 6: Verify the Setup**
+## Optional: ServiceMonitor Setup (For Reference)
 
-- **Check Prometheus Targets**:
-  Open Prometheus at `http://prometheus-operated.monitoring.svc:9090/targets` to verify the `ServiceMonitor` is active and targets are "UP."
-- **Test Grafana Panels**:
-  Add panels to your dashboard with PromQL queries to confirm data is displayed correctly.
+The following outlines the original `ServiceMonitor` setup, which can be revisited later.
+
+1. **ServiceMonitor YAML**:
+```yaml
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: servicemonitor
+  namespace: triton-monitoring
+  labels:
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: triton-is-predictor
+  endpoints:
+    - port: metrics
+      interval: 5s
+      path: /metrics
+
+```
+
+2. **Prometheus Configuration to Include ServiceMonitor**:
+```yaml
+apiVersion: monitoring.coreos.com/v1
+kind: Prometheus
+metadata:
+  name: prometheus
+  namespace: monitoring
+spec:
+  serviceMonitorSelector:
+    matchLabels:
+      release: prometheus
+```
+
+3. **Service with Correct Labels**:
+Ensure the service exposing `/metrics` includes labels matching the `selector.matchLabels` in the `ServiceMonitor`. Example:
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: example-service
+  labels:
+    app: example-app
+spec:
+  ports:
+    - name: metrics
+      port: 8080
+      targetPort: 8080
+  selector:
+    app: example-app
+```
+
+---
+
+## Notes
+
+- The standalone Prometheus and Grafana deployment ensures greater control and stability.
+- Retain the ServiceMonitor setup as a backup reference.
 
 ---
