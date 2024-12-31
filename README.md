@@ -9,5 +9,6 @@ https://prometheus-k8s-openshift-monitoring.apps-crc.testing/
 oc whoami --show-token
 
 key: Authorization
-value: Bearer <token>
+
+value: Bearer insert-token-here
 
