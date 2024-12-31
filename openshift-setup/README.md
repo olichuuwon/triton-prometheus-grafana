@@ -288,5 +288,6 @@ spec:
 
 - The standalone Prometheus and Grafana deployment ensures greater control and stability.
 - Retain the ServiceMonitor setup as a backup reference.
+- New: ServiceMonitor methods works as expected now, to clean up dashboard and add in more metrics.
 
 ---
